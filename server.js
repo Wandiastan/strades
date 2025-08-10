@@ -19,9 +19,49 @@ const metaApi = new MetaApi(META_API_TOKEN);
 // Store active connections
 const activeConnections = new Map();
 
+// Root endpoint
+app.get('/', (req, res) => {
+  res.json({ 
+    status: 'OK', 
+    message: 'MT4/MT5 Backend Server is running',
+    endpoints: {
+      health: '/health',
+      connect: '/connect',
+      account: '/account/:connectionId',
+      disconnect: '/disconnect/:connectionId',
+      connections: '/connections'
+    }
+  });
+});
+
 // Health check endpoint
 app.get('/health', (req, res) => {
-  res.json({ status: 'OK', message: 'MT4/MT5 Backend Server is running' });
+  res.json({ 
+    status: 'OK', 
+    message: 'MT4/MT5 Backend Server is running',
+    timestamp: new Date().toISOString(),
+    metaApi: 'Connected'
+  });
+});
+
+// Test MetaAPI connection
+app.get('/test-metaapi', async (req, res) => {
+  try {
+    console.log('Testing MetaAPI connection...');
+    const accounts = await metaApi.metatraderAccountApi.getAccounts();
+    console.log('MetaAPI test successful, accounts found:', accounts.length);
+    res.json({
+      success: true,
+      message: 'MetaAPI connection successful',
+      accountsCount: accounts.length
+    });
+  } catch (error) {
+    console.error('MetaAPI test failed:', error);
+    res.status(500).json({
+      success: false,
+      error: 'MetaAPI connection failed: ' + error.message
+    });
+  }
 });
 
 // Connect to MT4/MT5 account
@@ -29,8 +69,11 @@ app.post('/connect', async (req, res) => {
   try {
     const { login, password, server } = req.body;
 
+    console.log('Received connection request:', { login, server, hasPassword: !!password });
+
     // Validate input
     if (!login || !password || !server) {
+      console.log('Validation failed - missing fields:', { login: !!login, password: !!password, server: !!server });
       return res.status(400).json({
         success: false,
         error: 'Missing required fields: login, password, server'
@@ -44,17 +87,25 @@ app.post('/connect', async (req, res) => {
       accountId: login,
       password: password,
       server: server,
-      type: 'cloud' // Use cloud connection
+      type: 'cloud', // Use cloud connection
+      name: `Account_${login}`, // Required name parameter
+      magic: 123456, // Required magic number
+      version: 5 // MT5 version
     };
 
+    console.log('Creating MetaAPI connection with config:', { ...connectionConfig, password: '[HIDDEN]' });
+    
     // Create connection
     const connection = await metaApi.metatraderAccountApi.createAccount(connectionConfig);
+    console.log('Connection created, waiting for deployment...');
     
     // Wait for connection to be deployed
     await connection.waitDeployed();
+    console.log('Connection deployed, waiting for connection...');
     
     // Wait for connection to be connected
     await connection.waitConnected();
+    console.log('Connection established successfully!');
 
     // Get account information
     const accountInfo = await connection.getAccountInformation();
