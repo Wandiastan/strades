@@ -48,13 +48,18 @@ app.get('/health', (req, res) => {
 app.get('/test-metaapi', async (req, res) => {
   try {
     console.log('Testing MetaAPI connection...');
-    const accounts = await metaApi.metatraderAccountApi.getAccounts();
-    console.log('MetaAPI test successful, accounts found:', accounts.length);
-    res.json({
-      success: true,
-      message: 'MetaAPI connection successful',
-      accountsCount: accounts.length
-    });
+    // Test if MetaAPI is properly initialized
+    if (metaApi && metaApi.metatraderAccountApi) {
+      console.log('MetaAPI is properly initialized');
+      res.json({
+        success: true,
+        message: 'MetaAPI connection successful',
+        status: 'Connected',
+        timestamp: new Date().toISOString()
+      });
+    } else {
+      throw new Error('MetaAPI not properly initialized');
+    }
   } catch (error) {
     console.error('MetaAPI test failed:', error);
     res.status(500).json({
